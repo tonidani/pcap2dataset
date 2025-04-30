@@ -32,7 +32,7 @@ docker-compose build
 ### 2. Run the Container
 
 ```bash
-docker-compose run pcap_dataset_generator
+docker-compose run pcap_2_dataset_generator
 ```
 
 You will land inside a bash shell in `/data` inside the container.
