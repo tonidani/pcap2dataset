@@ -1,0 +1,15 @@
+# Ignore local data folder with PCAPs, alerts, etc.
+data/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Editor config files
+.vscode/
+.idea/

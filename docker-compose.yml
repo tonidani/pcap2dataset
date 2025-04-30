@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  pcap_2_dataset_generator:
+    build: .
+    container_name: pcap2dataset
+    volumes:
+      - ./data:/data
+      - ./:/app
+    working_dir: /app
+    entrypoint: [ "bash" ]
+    tty: true
