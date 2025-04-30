@@ -42,7 +42,7 @@ You will land inside a bash shell in `/data` inside the container.
 After entering the container, you can run:
 
 ```bash
-python /app/pcap_ai_dataset_generator.py \
+python3 /app/pcap2dataset.py \
   --pcap /data/your_file.pcap \
   --alerts /data/your_alerts.json \
   --output name_of_otuput \
