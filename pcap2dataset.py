@@ -12,6 +12,7 @@ import collections
 import ipaddress  # for safe IP parsing
 import numpy as np  # for numerical transformations
 
+from aggregate_flows_to_cic_format import aggregate_flows_to_cic_format
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -27,8 +28,7 @@ class AlertFormat(Enum):
 
 class DatasetMode(Enum):
     FLOW         = 'flow'
-    FLOW_PAYLOAD = 'flow_payload'
-    IDS          = 'ids'
+    PACKET       = 'packet'
 
     @staticmethod
     def list() -> List[str]:
@@ -42,6 +42,15 @@ class OutputFormat(Enum):
     @staticmethod
     def list() -> List[str]:
         return [e.value for e in OutputFormat]
+
+
+class LabelsOutputFormat(Enum):
+    CIC_IDS_2017     = 'CIC_IDS_2017'
+    BASIC    = 'basic'
+
+    @staticmethod
+    def list() -> List[str]:
+        return [e.value for e in LabelsOutputFormat]
 
 
 
@@ -167,26 +176,22 @@ def process_streaming(
     base_fields = [
         '-e', 'frame.time_epoch', '-e', 'ip.src', '-e', 'ip.dst',
         '-e', 'tcp.srcport', '-e', 'tcp.dstport', '-e', '_ws.col.Protocol',
-        '-e', 'frame.len', '-e', 'ip.ttl', '-e', 'tcp.flags',
-        '-e', 'tcp.window_size_value', '-e', 'tcp.seq', '-e', 'tcp.ack'
+        '-e', 'frame.len', '-e', 'frame.cap_len',
+        '-e', 'ip.len', '-e', 'ip.ttl', '-e', 'ip.flags', '-e', 'ip.dsfield', '-e', 'ip.hdr_len',
+        '-e', 'tcp.len', '-e', 'tcp.hdr_len', '-e', 'tcp.seq', '-e', 'tcp.ack',
+        '-e', 'tcp.window_size_value', '-e', 'tcp.window_size',
+        '-e', 'tcp.flags',
+        '-e', 'tcp.analysis.retransmission', '-e', 'tcp.analysis.duplicate_ack',
+        '-e', 'tcp.analysis.bytes_in_flight', '-e', 'tcp.analysis.initial_rtt',
+        '-e', 'frame.number', '-e', 'frame.time_delta',
+        '-e', 'http.request.method', '-e', 'http.request.uri',
+        '-e', 'http.user_agent', '-e', 'dns.qry.name', '-e', 'dns.qry.type',
+        '-e', 'data.text'
     ]
-    extra_fields = []
-    if mode in (DatasetMode.FLOW_PAYLOAD, DatasetMode.IDS):
-        extra_fields = [
-            '-e', 'http.request.method', '-e', 'http.request.uri',
-            '-e', 'dns.qry.name', '-e', 'dns.qry.type',
-            '-e', 'data.text'
-        ]
-    ids_fields = []
-    if mode == DatasetMode.IDS:
-        ids_fields = [
-            '-e', 'ip.len', '-e', 'ip.flags', '-e', 'ip.dsfield',
-            '-e', 'tcp.analysis.retransmission', '-e', 'tcp.analysis.duplicate_ack',
-            '-e', 'tcp.analysis.bytes_in_flight', '-e', 'frame.number',
-            '-e', 'frame.time_delta'
-        ]
 
-    fields = base_fields + extra_fields + ids_fields
+    base_fields += ['-e', 'ip.frag_offset', '-e', 'data.data']
+
+    fields = base_fields
     cmd = ['tshark', '-r', pcap, '-T', 'fields'] + fields + [
         '-E', 'header=y', '-E', 'separator=\t', '-o',
         'tcp.desegment_tcp_streams:false'
@@ -197,24 +202,52 @@ def process_streaming(
                          chunksize=batch_size, engine='python')
 
     name_map = {
-        'frame.time_epoch': 'timestamp', 'ip.src': 'src_ip',
-        'ip.dst': 'dst_ip', 'tcp.srcport': 'src_port',
-        'tcp.dstport': 'dst_port', '_ws.col.Protocol': 'protocol',
-        'frame.len': 'frame_len', 'ip.ttl': 'ttl',
-        'tcp.flags': 'tcp_flags', 'tcp.window_size_value': 'tcp_win',
-        'tcp.seq': 'tcp_seq', 'tcp.ack': 'tcp_ack',
-        'http.request.method': 'http_method', 'http.request.uri': 'http_uri',
-        'dns.qry.name': 'dns_qry_name', 'dns.qry.type': 'dns_qry_type',
-        'data.text': 'raw_payload', 'ip.len': 'ip_len', 'ip.flags': 'ip_flags',
-        'ip.dsfield': 'ip_dsfield', 'tcp.analysis.retransmission': 'tcp_retrans',
+        'frame.time_epoch': 'timestamp', 
+        'ip.src': 'src_ip', 
+        'ip.dst': 'dst_ip',
+        'tcp.srcport': 'src_port', 
+        'tcp.dstport': 'dst_port',
+        '_ws.col.Protocol': 'protocol', 
+        'frame.len': 'frame_len',
+        'frame.cap_len': 'cap_len', 
+        'ip.len': 'ip_len', 
+        'ip.ttl': 'ttl',
+        'ip.flags': 'ip_flags', 
+        'ip.dsfield': 'ip_dsfield', 
+        'ip.hdr_len': 'ip_hdr_len',
+        'tcp.len': 'tcp_len', 
+        'tcp.hdr_len': 'tcp_hdr_len', 
+        'tcp.seq': 'tcp_seq',
+        'tcp.ack': 'tcp_ack', 
+        'tcp.window_size_value': 'tcp_win_value',
+        'tcp.window_size': 'tcp_win', 
+        'tcp.len': 'tcp_segment_size',
+        'tcp.flags': 'tcp_flags', 
+        'tcp.analysis.retransmission': 'tcp_retrans',
         'tcp.analysis.duplicate_ack': 'tcp_dup_ack',
         'tcp.analysis.bytes_in_flight': 'tcp_bytes_flight',
-        'frame.number': 'frame_no', 'frame.time_delta': 'frame_delta'
+        'tcp.analysis.initial_rtt': 'tcp_initial_rtt',
+        'frame.number': 'frame_no', 
+        'frame.time_delta': 'frame_delta',
+        'http.request.method': 'http_method', 
+        'http.request.uri': 'http_uri',
+        'http.user_agent': 'http_user_agent', 
+        'dns.qry.name': 'dns_qry_name',
+        'dns.qry.type': 'dns_qry_type', 
+        'data.text': 'raw_payload'
     }
+
+    name_map['ip.frag_offset']   = 'ip_frag_offset'
+    name_map['data.data']        = 'raw_payload_hex'   # opcjonalnie
 
     for chunk in reader:
         chunk.rename(columns=name_map, inplace=True)
         chunk['timestamp'] = pd.to_numeric(chunk['timestamp'], errors='coerce')
+        chunk['tcp_segment_size'] = (
+                pd.to_numeric(chunk['ip_len'], errors='coerce') -
+                pd.to_numeric(chunk['ip_hdr_len'], errors='coerce') -
+                pd.to_numeric(chunk['tcp_hdr_len'], errors='coerce')
+            ).fillna(0).clip(lower=0)
         chunk['iat'] = chunk['timestamp'].diff().fillna(0)
 
         def entropy(s: Any) -> float:
@@ -232,7 +265,13 @@ def process_streaming(
         if 'raw_payload' in chunk:
             chunk['payload_entropy'] = chunk['raw_payload'].apply(entropy).fillna(0)
 
-        flags = chunk['tcp_flags'].fillna('0').apply(lambda x: int(x, 0))
+        #flags = chunk['tcp_flags'].fillna('0').apply(lambda x: int(x, 0))
+        flags = (
+            chunk['tcp_flags']
+            .fillna('0')
+            .str.replace(r'\(.*\)', '', regex=True)  # usuń opis w nawiasach
+            .apply(lambda x: int(x, 0))
+            )
         for bit, name in [
             (1,'fin'), (2,'syn'), (4,'rst'), (8,'psh'),
             (16,'ack'), (32,'urg'), (64,'ece'), (128,'cwr')
@@ -308,23 +347,44 @@ def process_streaming(
 
         # select columns
         cols = [
-            'timestamp','src_ip','dst_ip','src_port','dst_port',
-            'protocol','frame_len','ttl','iat'
+            'timestamp',
+            'src_ip',
+            'dst_ip',
+            'src_port',
+            'dst_port',
+            'protocol',
+            'frame_len',
+            'cap_len',
+            'ttl',
+            'iat',
+            'http_method',
+            'http_uri',
+            'http_user_agent',
+            'dns_qry_name',
+            'dns_qry_type',
+            'payload_entropy',
+            'ip_len',
+            'ip_flags',
+            'ip_dsfield',
+            'ip_hdr_len',
+            'tcp_segment_size',
+            'tcp_hdr_len',
+            'tcp_seq',
+            'tcp_ack',
+            'tcp_win',
+            'tcp_win_value',
+            'tcp_retrans',
+            'tcp_dup_ack',
+            'tcp_bytes_flight',
+            'tcp_initial_rtt',
+            'frame_no',
+            'frame_delta',
+            'ip_frag_offset',
+            'raw_payload_hex',
         ]
-        if mode in (DatasetMode.FLOW_PAYLOAD, DatasetMode.IDS):
-            cols += ['http_method','http_uri',
-                     'dns_qry_name','dns_qry_type','payload_entropy']
-        if mode == DatasetMode.IDS:
-            cols += [
-                'ip_len','ip_flags','ip_dsfield','tcp_retrans','tcp_dup_ack',
-                'tcp_bytes_flight','frame_no','frame_delta'
-            ]
-        cols += [f'tcp_flag_{n}' for n in
-                 ['fin','syn','rst','psh','ack','urg','ece','cwr']]
+        cols += [f'tcp_flag_{n}' for n in ['fin','syn','rst','psh','ack','urg','ece','cwr']]
         cols += ['label'] + alert_cols
-        if mode == DatasetMode.FLOW_PAYLOAD:
-            cols += ['payload','payload_printable']
-
+        cols += ['raw_payload']
         data = chunk[cols]
         if out_fmt == OutputFormat.CSV:
             data.to_csv(out_path,
@@ -373,7 +433,7 @@ def main():
         '--alert-format', choices=AlertFormat.list(), default='suricata'
     )
     parser.add_argument(
-        '--mode', choices=DatasetMode.list(), default='flow'
+        '--mode', choices=DatasetMode.list(), default='packet',
     )
     parser.add_argument(
         '--output-format', choices=OutputFormat.list(), default='csv'
@@ -401,6 +461,13 @@ def main():
         out_dir='/data',
         batch_size=args.batch_size
     )
+
+    # if args.mode == DatasetMode.FLOW:
+    #     aggregate_flows_to_cic_format(
+    #         input_csv=args.output,
+    #         output_csv=args.output.replace('.csv', '_flow.csv')
+    #     )
+
 
 if __name__ == '__main__':
     main()

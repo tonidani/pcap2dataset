@@ -5,7 +5,7 @@ services:
     build: .
     container_name: pcap2dataset
     volumes:
-      - ./data:/data
+      - /media/toni/PROJECTS/data:/data
       - ./:/app
     working_dir: /app
     entrypoint: [ "bash" ]
