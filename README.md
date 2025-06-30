@@ -1,8 +1,8 @@
-# PCAP AI Dataset Generator 🚀
+# PCAP AI Dataset Generator
 
 A lightweight tool to generate AI training datasets from PCAP files and Suricata alert logs to classify packets into attacks.
 
-## 🛠 Features
+## Features
 
 - Converts PCAP traffic into structured datasets
 - Supports Suricata (eve.json) - Future Wazuh (alerts.json), and Custom alert formats
@@ -10,7 +10,7 @@ A lightweight tool to generate AI training datasets from PCAP files and Suricata
 - Outputs: CSV, JSON, or Parquet
 - Lightweight Docker + Docker Compose setup
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 project/
@@ -21,7 +21,7 @@ project/
 ├── README.md                  # Documentation
 ```
 
-## 🐳 Docker Setup
+## Docker Setup
 
 ### 1. Build the Docker Image
 
@@ -37,7 +37,7 @@ docker-compose run pcap_2_dataset_generator
 
 You will land inside a bash shell in `/data` inside the container.
 
-## 🚀 Using the Dataset Generator
+## Using the Dataset Generator
 
 After entering the container, you can run:
 
@@ -60,7 +60,7 @@ python3 /app/pcap2dataset.py \
 - `--normalize` → Normalize features (IPs/ports/protocol) for AI
 - `--output-format` → Choose between `csv`, `json`, or `parquet`
 
-## 📦 The `/data` Folder
+## The `/data` Folder
 
 - Mounts automatically to your local `./data`
 - Place your PCAP files and alert files inside it
@@ -76,7 +76,7 @@ project/
     ├── output_dataset.parquet
 ```
 
-## 📋 Supported Alert Formats
+## Supported Alert Formats
 
 | Source   | Format      |
 |:---------|:------------|
@@ -84,7 +84,7 @@ project/
 | Wazuh    | alerts.json  |
 | Custom   | any JSON + mapping |
 
-## 🧩 Custom Mapping Example
+## Custom Mapping Example
 
 For Custom alert formats, you need a `mapping.json` like:
 
@@ -116,14 +116,14 @@ For Custom alert formats, you need a `mapping.json` like:
 
 - `src_ip`, `dst_ip`, `src_port`, `dst_port`, `alert`, `timestamp` are mapped dynamically.
 
-## 📈 Normalized Dataset Example (IDS Mode)
+## Normalized Dataset Example (IDS Mode)
 
 | timestamp        | src_ip    | dst_ip    | src_port | dst_port | protocol | frame_len | ttl | iat                 | http_method | http_uri | dns_qry_name | dns_qry_type | payload_entropy | ip_len | ip_flags | ip_dsfield | tcp_retrans | tcp_dup_ack | tcp_bytes_flight | frame_no | frame_delta | tcp_flag_fin | tcp_flag_syn | tcp_flag_rst | tcp_flag_psh | tcp_flag_ack | tcp_flag_urg | tcp_flag_ece | tcp_flag_cwr | label | alert                                                                 | attack_type                       | severity | flow_id             | pcap_cnt | direction  | flow_pkts_toserver | flow_pkts_toclient | flow_bytes_toserver | flow_bytes_toclient | flow_start                       | app_proto | stream | pcap_filename |
 |------------------|-----------|-----------|----------|----------|----------|-----------|-----|---------------------|-------------|----------|--------------|--------------|-----------------|--------|----------|------------|-------------|-------------|------------------|----------|-------------|--------------|--------------|--------------|--------------|--------------|--------------|--------------|--------------|-------|-----------------------------------------------------------------------|-----------------------------------|----------|---------------------|----------|------------|--------------------|--------------------|---------------------|---------------------|----------------------------------|-----------|--------|---------------|
 | 1745110951.30714 | 10.0.0.1  | 10.0.0.5  | 44610    | 443      | TCP      | 74        | 63  | 0.0008890628814697  |             |          |              |              | 0               | 60     | 0x02     | 0x00       |             |             | 32               | 0.000889 | 0           | 1            | 0            | 0            | 0            | 0            | 0            | 0            | 1            |       | SURICATA STREAM reassembly sequence GAP -- missing packet(s)          | Generic Protocol Command Decode   | 3        | 2163594780329286    | 96       | to_server  | 11                 | 10                 | 1562                | 4039                | 2025-04-20T01:02:31.307143+0000 | tls       | 0      |               |
 
 
-## ⚡ Quickstart Summary
+## Quickstart Summary
 
 ```bash
 # Build container
@@ -136,14 +136,13 @@ docker-compose up -d
 python3 /app/pcap2dataset.py --pcap /data/test.pcap --alerts /data/eve.json --output /data/output --alert-format suricata --normalize --output-format csv
 ```
 
-## 🧠 Tips
+## Tips
 
 - Use correct timestamps in alert files to match packets accurately.
 - Normalization is highly recommended for Machine Learning training.
 - Payload-based datasets are heavier but capture more attack fingerprints.
 
-## 📜 License
+## License
 
 MIT License – Free to use and adapt.
 
-Made with ❤️ by Your Team.
